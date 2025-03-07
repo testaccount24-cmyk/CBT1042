@@ -1,0 +1,17 @@
+
+         'FCLARKE.DEIMBED.EXEC' - Directory
+
+
+           Usage or
+ Member    Caller      Description
+ ========  =========   =====================================
+
+ $$$#DATE  data        Lst chg 20240412 17:22 by CBT-507
+
+ #INDEX    data        This member
+
+ @@README  text        About the material in this library
+
+ @FIL1042  text        Inventory
+
+ DEIMBED   fragment    Extract ISPF elements from REXX
