@@ -1,0 +1,131 @@
+/*
+ DEIMBED        by Frank Clarke, rexxhead@yahoo.com
+
+
+ (DEIMBED also appears on FILE433 of the CBT collection.)
+
+ High-level overview:  Because a REXX program can actually read its own source,
+ it's possible to build sufficient 'smarts' into it to enable unpacking of
+ subsidiary material that has been packaged with the actual code.
+
+ DEIMBED is a process for extracting non-REXX material and making it available
+ for use by its enclosing code.  Typically, it is used to extract ISPF panels
+ and skeletons that will be used for ISPF dialogs driven by the enclosing REXX
+ routine.  (There is no reason that assets from one application should exist on
+ the same library as those of a different application.  The likelihood that any
+ particular ISPF asset will be shared with another program is approximately
+ zero.)
+
+ Handling ISPF assets in this manner has the benefit of jet-propelling routines
+ that implement it.  For decades, MVS and its successors have been doing
+ read-aheads:  by default, five (5) buffers are filled by the first SIO
+ operation; another SIO doesn't happen until all the records in the first buffer
+ have been processed and SIOs are done buffer-at-a-time from then on.  Modern
+ DASD half-track blocksizes are generally upwards of 20K, so unless a REXX
+ routine is substantially larger than 100K, the entire routine will be in main
+ storage within microseconds of invocation.  Extracting that subsidiary material
+ and arranging it on VIO will also happen at main-storage speed -- effectively
+ 'instantaneously'.
+
+ Why does this matter?  In standard ISPF (not TEST-mode) only the first request
+ for an ISPF asset (panel, skeleton, message set, &c.) is done via I/O.  All
+ subsequent accesses for that asset are done from the ISPF cache -- much
+ speedier.  An ISPF developer will usually invoke ISPF in TEST-mode when doing
+ dialog development and maintenance.  In TEST-mode, all accesses are done via
+ I/O, and the cache is not used.  In TEST-mode, changing (e.g.) a panel means
+ that the change will be effective immediately.  The penalty for using TEST-mode
+ is that ALL requests are handled via I/O.
+
+ In the absence of TEST-mode, the only way to see the effect of recent changes
+ is to exit ISPF to READY and restart it.  This is phenomenally expensive in
+ terms of I/O because when ISPF starts, it reads the directories of all datasets
+ attached as ISPPLIB, ISPSLIB, ISPMLIB, ISPLLIB, ISPTLIB, and others so that it
+ will be able to quickly locate a requested member.  TEST-mode is much less
+ expensive than that, but with DEIMBED, even TEST-mode becomes unnecessary.
+ ISPF caches based on dsname+membername, but re-executing a REXX routine that
+ DEIMBEDs its ISPF material establishes a different dsname for the cache to use.
+ This extracted panel is different than the same panel extracted seconds earlier
+ because it has a different dsname.
+
+ There are other advantages.  Because DEIMBED LIBDEFs extracted material to a
+ preferential position relative to other ISPF assets, there is no chance that an
+ extracted member will conflict with another identically-named member further
+ down in the concatenation.  Since there can be no naming conflict, there is no
+ need for naming conventions or standards.  Extracted assets can have any
+ desired name, even one that accurately describes its function.  Naming rules
+ designed to minimize conflicts lose their reason for existing.
+
+ The components to be extracted are enclosed in a comment whose start and end
+ are on individual lines for easier recognition.  Each component is identified
+ by a triple-close-paren ")))" in column 1 followed by a DDName and a membername
+ plus optional comments.  The text of the component begins on the next line.
+ Example:
+   /*
+   ))) <ddn>  <membernm1>   <remarks>
+   ... text of the element ...
+   ... text of the element ...
+   ... text of the element ...
+   ))) <ddn>  <membernm2>   <remarks>
+   ... text of the element ...
+   ... text of the element ...
+   */
+
+ There are no restrictions on the DDName, but ISPF assets are treated
+ differently than non-ISPF material.  Items to be LIBDEFd should be held to 4
+ character DDNs to accomodate the 'ISP' that will be prepended.  Non-ISPF
+ elements are not LIBDEFd but EXECIOd to a PO/80 dataset named for the DDN
+ specified.
+
+ It is STRONGLY RECOMMENDED that a prominent notice such as the following be
+ placed at the beginning of the code so that future maintainers will be put
+ immediately on notice that embedded components exist.
+   |**-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-**|
+   |                                                                 |
+   |          WARNING: EMBEDDED COMPONENTS.                          |
+   |                      See text following TOOLKIT_INIT            |
+   |                                                                 |
+   |**-***-***-***-***-***-***-***-***-***-***-***-***-***-***-***-**|
+ This comment names TOOLKIT_INIT, the last subroutine of REXXSKEL-based code,
+ but for routines that are NOT REXXSKEL-based, it should be modified
+ accordingly.
+
+                             -==+++==-
+
+  Summarizing:  What benefits ought we expect to see from handling external
+  program elements in this fashion?
+
+  1.  A developer will typically invoke ISPF in TEST-mode during development.
+  In TEST-mode, ISPF caches nothing, and does all service requests via I/O.
+  Changes made to (e.g.) a panel are thus reflected immediately.  You always see
+  the last-saved version.  The penalty for this is that all service requests
+  involve I/O, even if they aren't part of the current development effort.
+
+  If TEST-mode is not used, changes to that panel will not be seen because the
+  panel is served out of the cache which is relatively static.  ISPF, however,
+  caches based on DSN+member and a freshly-extracted panel is placed into a
+  different dataset; this newly-extracted member is recognized as a different
+  member than that in the cache and is served when requested.  Development can
+  thus be done without TEST-mode and without having to restart ISPF: a huge
+  savings in I/O.
+
+  2. During program development or maintenance, if it's necessary to refer to a
+  panel, skeleton, or other asset, generally, these will be found within the
+  current member.
+
+  3. When distributing or installing an application, only the enclosing REXX
+  code need be distributed or installed.
+
+  4.  Naming standards no longer have a benefit and thus no longer have a raison
+  d'être.  Internally stored elements may have any name and can now be
+  functionally-named.  That is: their names may now be truly descriptive.
+
+  Because the libraries are LIBDEF'd into place when needed and LIBDEF'd out of
+  existence when no longer needed, there is no danger of creating a naming
+  conflict, one of the hazards prevented by naming standards.  When used in
+  production, the act of loading the program source also loads all the
+  associated elements such that they are immediately available for packaging to
+  VIO datasets.  The I/O savings in development are now replicated for users in
+  production.  In fact, I have been unable to detect any costs related to
+  embedded program elements.  There seem to be nothing but benefits.
+
+*/
